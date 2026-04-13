@@ -1,0 +1,24 @@
+{
+  "originHash" : "c47b1e3d8b7978d05077a9a794f0e914afc801e716921fae93089871091527db",
+  "pins" : [
+    {
+      "identity" : "stream-chat-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetStream/stream-chat-swift.git",
+      "state" : {
+        "branch" : "grouped-channels-endpoint",
+        "revision" : "b0bef38c8379e01abd2596b2d7eb2c084650c56e"
+      }
+    },
+    {
+      "identity" : "stream-chat-swiftui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetStream/stream-chat-swiftui",
+      "state" : {
+        "branch" : "grouped-channels-endpoint",
+        "revision" : "53daf13e502c67aa8708612534745510d81f2959"
+      }
+    }
+  ],
+  "version" : 3
+}
