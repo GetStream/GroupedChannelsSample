@@ -58,7 +58,7 @@ class ChatManager: ObservableObject {
         prefillControllers()
     }
 
-    /// Fetches all four channel buckets in a single request and prefills each
+    /// Fetches grouped channel buckets in a single request and prefills each
     /// controller so the first `synchronize()` call (made internally by the
     /// view model) skips the redundant per-controller remote query.
     private func prefillControllers() {
@@ -69,14 +69,12 @@ class ChatManager: ObservableObject {
                 Task { @MainActor in self.isPrefilled = true }
             }
             do {
-                // Returns buckets in order: all, new, current, expired —
-                // matches the channelListConfigs order set up in setupChannelListConfigs.
-                let groups = try await chatClient.groupedQueryChannels()
+                let groupedChannels = try await chatClient.groupedQueryChannels()
                 try await withThrowingTaskGroup(of: Void.self) { group in
-                    for (config, channels) in zip(channelListConfigs, groups) {
+                    for (config, bucket) in zip(channelListConfigs, groupedChannels.buckets) {
                         group.addTask {
                             try await withCheckedThrowingContinuation { continuation in
-                                config.controller.prefill(channels: channels) { error in
+                                config.controller.prefill(channels: bucket.channels) { error in
                                     if let error { continuation.resume(throwing: error) }
                                     else { continuation.resume() }
                                 }
