@@ -20,6 +20,7 @@ extension FilterKey where Scope == ChannelListFilterScope {
 
 struct ChannelListConfig: Identifiable {
     let id: Int
+    let groupKey: String
     let title: String
     let icon: String
     let controller: ChatChannelListController
@@ -58,7 +59,7 @@ class ChatManager: ObservableObject {
         prefillControllers()
     }
 
-    /// Fetches grouped channel buckets in a single request and prefills each
+    /// Fetches grouped channel groups in a single request and prefills each
     /// controller so the first `synchronize()` call (made internally by the
     /// view model) skips the redundant per-controller remote query.
     private func prefillControllers() {
@@ -71,10 +72,14 @@ class ChatManager: ObservableObject {
             do {
                 let groupedChannels = try await chatClient.groupedQueryChannels()
                 try await withThrowingTaskGroup(of: Void.self) { group in
-                    for (config, bucket) in zip(channelListConfigs, groupedChannels.buckets) {
+                    for config in channelListConfigs {
+                        guard let groupedChannelGroup = groupedChannels.groups[config.groupKey] else {
+                            continue
+                        }
+
                         group.addTask {
                             try await withCheckedThrowingContinuation { continuation in
-                                config.controller.prefill(channels: bucket.channels) { error in
+                                config.controller.prefill(channels: groupedChannelGroup.channels) { error in
                                     if let error { continuation.resume(throwing: error) }
                                     else { continuation.resume() }
                                 }
@@ -194,10 +199,10 @@ class ChatManager: ObservableObject {
         )
 
         channelListConfigs = [
-            ChannelListConfig(id: 0, title: "All",     icon: "tray.full",                         controller: allController),
-            ChannelListConfig(id: 1, title: "New",     icon: "sparkles",                          controller: newController),
-            ChannelListConfig(id: 2, title: "Current", icon: "bubble.left.and.bubble.right",      controller: currentController),
-            ChannelListConfig(id: 3, title: "Expired", icon: "clock.badge.xmark",                 controller: expiredController)
+            ChannelListConfig(id: 0, groupKey: "all", title: "All", icon: "tray.full", controller: allController),
+            ChannelListConfig(id: 1, groupKey: "new", title: "New", icon: "sparkles", controller: newController),
+            ChannelListConfig(id: 2, groupKey: "current", title: "Current", icon: "bubble.left.and.bubble.right", controller: currentController),
+            ChannelListConfig(id: 3, groupKey: "expired", title: "Expired", icon: "clock.badge.xmark", controller: expiredController)
         ]
     }
 

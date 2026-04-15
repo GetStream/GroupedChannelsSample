@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		844C501F2F8FCC7500DB7972 /* StreamChatSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 844C501E2F8FCC7500DB7972 /* StreamChatSwiftUI */; };
 		847B405A2F8CE753005CEF4F /* StreamChatSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 847B40592F8CE753005CEF4F /* StreamChatSwiftUI */; };
-		847B6C9C2F8D4854005CEF4F /* StreamChatSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 847B6C9B2F8D4854005CEF4F /* StreamChatSwiftUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,7 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				847B6C9C2F8D4854005CEF4F /* StreamChatSwiftUI in Frameworks */,
+				844C501F2F8FCC7500DB7972 /* StreamChatSwiftUI in Frameworks */,
 				847B405A2F8CE753005CEF4F /* StreamChatSwiftUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -73,7 +73,7 @@
 			name = GroupedEndpoint;
 			packageProductDependencies = (
 				847B40592F8CE753005CEF4F /* StreamChatSwiftUI */,
-				847B6C9B2F8D4854005CEF4F /* StreamChatSwiftUI */,
+				844C501E2F8FCC7500DB7972 /* StreamChatSwiftUI */,
 			);
 			productName = GroupedEndpoint;
 			productReference = 847B40442F8CE39C005CEF4F /* GroupedEndpoint.app */;
@@ -104,7 +104,7 @@
 			mainGroup = 847B403B2F8CE39C005CEF4F;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				847B6C9A2F8D4854005CEF4F /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */,
+				844C501D2F8FCC7500DB7972 /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 847B40452F8CE39C005CEF4F /* Products */;
@@ -346,7 +346,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		847B6C9A2F8D4854005CEF4F /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */ = {
+		844C501D2F8FCC7500DB7972 /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/GetStream/stream-chat-swiftui";
 			requirement = {
@@ -357,13 +357,13 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		847B40592F8CE753005CEF4F /* StreamChatSwiftUI */ = {
+		844C501E2F8FCC7500DB7972 /* StreamChatSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 844C501D2F8FCC7500DB7972 /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */;
 			productName = StreamChatSwiftUI;
 		};
-		847B6C9B2F8D4854005CEF4F /* StreamChatSwiftUI */ = {
+		847B40592F8CE753005CEF4F /* StreamChatSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 847B6C9A2F8D4854005CEF4F /* XCRemoteSwiftPackageReference "stream-chat-swiftui" */;
 			productName = StreamChatSwiftUI;
 		};
 /* End XCSwiftPackageProductDependency section */
