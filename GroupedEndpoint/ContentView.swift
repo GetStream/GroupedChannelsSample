@@ -9,6 +9,18 @@ import SwiftUI
 import StreamChat
 import StreamChatSwiftUI
 
+private struct LazyView<Content: View>: View {
+    private let build: () -> Content
+
+    init(@ViewBuilder _ build: @escaping () -> Content) {
+        self.build = build
+    }
+
+    var body: some View {
+        build()
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject var chatManager: ChatManager
     @State private var selectedPage = 0
@@ -52,7 +64,7 @@ struct ContentView: View {
                     VStack(spacing: 4) {
                         Image(systemName: config.icon)
                             .font(.system(size: 18))
-                        Text(config.title)
+                        Text(chatManager.title(for: config))
                             .font(.caption.weight(.medium))
                     }
                     .frame(maxWidth: .infinity)
@@ -74,8 +86,13 @@ struct ContentView: View {
     private var channelListPager: some View {
         TabView(selection: $selectedPage) {
             ForEach(chatManager.channelListConfigs) { config in
-                ChannelListPageView(config: config)
-                    .tag(config.id)
+                LazyView {
+                    ChannelListPageView(
+                        config: config,
+                        title: chatManager.title(for: config)
+                    )
+                }
+                .tag(config.id)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -86,11 +103,13 @@ struct ContentView: View {
 
 struct ChannelListPageView: View {
     let config: ChannelListConfig
+    let title: String
 
     @StateObject private var viewModel: ChatChannelListViewModel
 
-    init(config: ChannelListConfig) {
+    init(config: ChannelListConfig, title: String) {
         self.config = config
+        self.title = title
         self._viewModel = StateObject(
             wrappedValue: ChatChannelListViewModel(channelListController: config.controller)
         )
@@ -103,7 +122,7 @@ struct ChannelListPageView: View {
                 ChatChannelListView(
                     viewFactory: DefaultViewFactory.shared,
                     viewModel: viewModel,
-                    title: config.title
+                    title: title
                 )
             }
         }

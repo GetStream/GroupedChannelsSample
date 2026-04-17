@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import Combine
 import StreamChat
 import StreamChatSwiftUI
+internal import Combine
 
 // MARK: - Custom filter keys
 
@@ -35,7 +35,11 @@ class ChatManager: ObservableObject {
     private(set) var chatClient: ChatClient
     private(set) var channelListConfigs: [ChannelListConfig] = []
     var streamChat: StreamChat
+    @Published private(set) var groupedChannels: GroupedChannels?
     @Published private(set) var isPrefilled = false
+    @Published private(set) var groupedUnreadChannels: GroupedUnreadChannels = [:]
+
+    private var currentUserController: CurrentChatUserController?
 
     private init() {
         LogConfig.level = .debug
@@ -56,7 +60,20 @@ class ChatManager: ObservableObject {
 
         streamChat = StreamChat(chatClient: chatClient, utils: .init(messageListConfig: .init(dateIndicatorPlacement: .messageList)))
         setupChannelListConfigs(userId: userId)
+        setupCurrentUserObserver()
         prefillControllers()
+    }
+
+    private func setupCurrentUserObserver() {
+        let controller = chatClient.currentUserController()
+        currentUserController = controller
+        controller.delegate = self
+        controller.synchronize { [weak self] _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.groupedUnreadChannels = controller.currentUser?.groupedUnreadChannels ?? [:]
+            }
+        }
     }
 
     /// Fetches grouped channel groups in a single request and prefills each
@@ -71,13 +88,16 @@ class ChatManager: ObservableObject {
             }
             do {
                 let groupedChannels = try await chatClient.groupedQueryChannels()
+                await MainActor.run {
+                    self.groupedChannels = groupedChannels
+                }
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     for config in channelListConfigs {
                         guard let groupedChannelGroup = groupedChannels.groups[config.groupKey] else {
                             continue
                         }
 
-                        group.addTask {
+                        group.addTask { @MainActor in
                             try await withCheckedThrowingContinuation { continuation in
                                 config.controller.prefill(channels: groupedChannelGroup.channels) { error in
                                     if let error { continuation.resume(throwing: error) }
@@ -212,5 +232,24 @@ class ChatManager: ObservableObject {
             channel.latestMessages.count,
             channel.lastMessageAt == nil ? 0 : 1
         )
+    }
+
+    func title(for config: ChannelListConfig) -> String {
+        let unreadCount = groupedUnreadChannels[config.groupKey] ?? 0
+        return "\(config.title) (\(unreadCount))"
+    }
+}
+
+// MARK: - CurrentChatUserControllerDelegate
+
+extension ChatManager: CurrentChatUserControllerDelegate {
+    func currentUserController(
+        _ controller: CurrentChatUserController,
+        didChangeCurrentUser change: EntityChange<CurrentChatUser>
+    ) {
+        let updated = change.item.groupedUnreadChannels ?? [:]
+        DispatchQueue.main.async {
+            self.groupedUnreadChannels = updated
+        }
     }
 }
