@@ -7,7 +7,7 @@
       "location" : "https://github.com/GetStream/stream-chat-swift.git",
       "state" : {
         "branch" : "grouped-channels-endpoint",
-        "revision" : "61becd4171921784ea9151c5da37aa961e10ea3b"
+        "revision" : "4fc7e3e268db1763a1c54f0a5274b510e9dd9899"
       }
     },
     {
@@ -16,7 +16,7 @@
       "location" : "https://github.com/GetStream/stream-chat-swiftui",
       "state" : {
         "branch" : "grouped-channels-endpoint",
-        "revision" : "53daf13e502c67aa8708612534745510d81f2959"
+        "revision" : "4022a0493494b2fc23590bc454a4e7199c7bcaa4"
       }
     }
   ],

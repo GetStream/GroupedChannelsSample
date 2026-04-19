@@ -85,11 +85,12 @@ struct ContentView: View {
 
     private var channelListPager: some View {
         TabView(selection: $selectedPage) {
-            ForEach(chatManager.channelListConfigs) { config in
+            ForEach(Array(zip(chatManager.channelListConfigs, chatManager.channelListViewModels)), id: \.0.id) { config, viewModel in
                 LazyView {
                     ChannelListPageView(
                         config: config,
-                        title: chatManager.title(for: config)
+                        title: chatManager.title(for: config),
+                        viewModel: viewModel
                     )
                 }
                 .tag(config.id)
@@ -104,16 +105,7 @@ struct ContentView: View {
 struct ChannelListPageView: View {
     let config: ChannelListConfig
     let title: String
-
-    @StateObject private var viewModel: ChatChannelListViewModel
-
-    init(config: ChannelListConfig, title: String) {
-        self.config = config
-        self.title = title
-        self._viewModel = StateObject(
-            wrappedValue: ChatChannelListViewModel(channelListController: config.controller)
-        )
-    }
+    @ObservedObject var viewModel: ChatChannelListViewModel
 
     var body: some View {
         NavigationStack {

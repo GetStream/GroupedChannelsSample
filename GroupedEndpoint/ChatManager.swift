@@ -38,6 +38,9 @@ class ChatManager: ObservableObject {
     @Published private(set) var groupedChannels: GroupedChannels?
     @Published private(set) var isPrefilled = false
     @Published private(set) var groupedUnreadChannels: GroupedUnreadChannels = [:]
+    // VMs are pre-created after prefill so re-renders of ContentView don't call
+    // synchronize() again on the same controller via a discarded wrappedValue VM.
+    private(set) var channelListViewModels: [ChatChannelListViewModel] = []
 
     private var currentUserController: CurrentChatUserController?
 
@@ -84,22 +87,24 @@ class ChatManager: ObservableObject {
             defer {
                 // Always unblock the UI, even if prefill fails — controllers
                 // fall back to individual synchronize() calls in that case.
-                Task { @MainActor in self.isPrefilled = true }
+                // VMs are created before isPrefilled so synchronize() inside their
+                // init fires while shouldSkipInitialRemoteUpdate is still true.
+                Task { @MainActor in
+                    self.createViewModels()
+                    self.isPrefilled = true
+                }
             }
             do {
-                let groupedChannels = try await chatClient.groupedQueryChannels()
+                let groupedChannels = try await chatClient.groupedQueryChannels(watch: true)
                 await MainActor.run {
                     self.groupedChannels = groupedChannels
                 }
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     for config in channelListConfigs {
-                        guard let groupedChannelGroup = groupedChannels.groups[config.groupKey] else {
-                            continue
-                        }
-
+                        let channels = groupedChannels.groups[config.groupKey]?.channels ?? []
                         group.addTask { @MainActor in
                             try await withCheckedThrowingContinuation { continuation in
-                                config.controller.prefill(channels: groupedChannelGroup.channels) { error in
+                                config.controller.prefill(channels: channels) { error in
                                     if let error { continuation.resume(throwing: error) }
                                     else { continuation.resume() }
                                 }
@@ -111,6 +116,16 @@ class ChatManager: ObservableObject {
             } catch {
                 print("[ChatManager] prefill failed: \(error)")
             }
+        }
+    }
+
+    // Must be called on MainActor after all prefill() calls complete.
+    // Creates one VM per controller while shouldSkipInitialRemoteUpdate is still true,
+    // so the synchronize() triggered inside ChatChannelListViewModel.init is skipped.
+    @MainActor
+    private func createViewModels() {
+        channelListViewModels = channelListConfigs.map { config in
+            ChatChannelListViewModel(channelListController: config.controller)
         }
     }
 
@@ -198,10 +213,22 @@ class ChatManager: ObservableObject {
         let currentController = chatClient.channelListController(
             query: currentQuery,
             filter: { channel in
-                guard channel.membership != nil else { return false }
-                if self.effectiveMessageCount(for: channel) < 2 { return false }
-                guard let lastMessageAt = channel.lastMessageAt else { return false }
-                return lastMessageAt > Date().addingTimeInterval(-14 * 24 * 3600)
+                guard channel.membership != nil else {
+                    print("[CurrentFilter] \(channel.cid) → false (no membership)")
+                    return false
+                }
+                let emc = self.effectiveMessageCount(for: channel)
+                if emc < 2 {
+                    print("[CurrentFilter] \(channel.cid) → false (emc=\(emc), msgCount=\(channel.messageCount ?? -1), latestMsgs=\(channel.latestMessages.count))")
+                    return false
+                }
+                guard let lastMessageAt = channel.lastMessageAt else {
+                    print("[CurrentFilter] \(channel.cid) → false (no lastMessageAt)")
+                    return false
+                }
+                let result = lastMessageAt > Date().addingTimeInterval(-14 * 24 * 3600)
+                print("[CurrentFilter] \(channel.cid) → \(result) (emc=\(emc), lastMsgAt=\(lastMessageAt))")
+                return result
             }
         )
 
