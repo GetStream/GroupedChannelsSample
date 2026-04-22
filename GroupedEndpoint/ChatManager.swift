@@ -89,7 +89,7 @@ class ChatManager: ObservableObject {
                 }
             }
             do {
-                let groupedChannels = try await chatClient.groupedQueryChannels(watch: true)
+                let groupedChannels = try await chatClient.queryGroupedChannels(watch: true)
                 await MainActor.run {
                     self.groupedChannels = groupedChannels
                 }
