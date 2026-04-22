@@ -106,6 +106,7 @@ struct ChannelListPageView: View {
     let config: ChannelListConfig
     let title: String
     @ObservedObject var viewModel: ChatChannelListViewModel
+    @EnvironmentObject var chatManager: ChatManager
 
     var body: some View {
         NavigationStack {
@@ -116,6 +117,15 @@ struct ChannelListPageView: View {
                     viewModel: viewModel,
                     title: title
                 )
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        chatManager.markAllRead(for: config)
+                    } label: {
+                        Image(systemName: "checkmark.circle")
+                    }
+                }
             }
         }
     }

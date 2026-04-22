@@ -265,6 +265,10 @@ class ChatManager: ObservableObject {
         let unreadCount = groupedUnreadChannels[config.groupKey] ?? 0
         return "\(config.title) (\(unreadCount))"
     }
+
+    func markAllRead(for config: ChannelListConfig) {
+        currentUserController?.markAllRead()
+    }
 }
 
 // MARK: - CurrentChatUserControllerDelegate
