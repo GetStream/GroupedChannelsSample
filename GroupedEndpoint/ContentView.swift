@@ -126,6 +126,13 @@ struct ChannelListPageView: View {
                         Image(systemName: "checkmark.circle")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        chatManager.createChannel()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
             }
         }
     }

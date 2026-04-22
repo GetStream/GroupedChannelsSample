@@ -263,6 +263,28 @@ class ChatManager: ObservableObject {
     func markAllRead(for config: ChannelListConfig) {
         currentUserController?.markAllRead()
     }
+
+    func createChannel() {
+        let channelId = ChannelId(type: .messaging, id: UUID().uuidString)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM HH:mm:ss"
+        let channelName = "Channel \(formatter.string(from: Date()))"
+
+        Task {
+            do {
+                let chat = try chatClient.makeChat(
+                    with: channelId,
+                    name: channelName,
+                    members: ["member_03"]
+                )
+                try await chat.get(watch: true)
+                try await chat.sendMessage(with: "Hello")
+            } catch {
+                print("[ChatManager] failed to create channel: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - CurrentChatUserControllerDelegate
