@@ -248,7 +248,8 @@ class ChatManager: ObservableObject {
     }
 
     private func effectiveMessageCount(for channel: ChatChannel) -> Int {
-        max(
+        print(#function, channel.messageCount ?? 0, channel.latestMessages.count, channel.lastMessageAt == nil)
+        return max(
             channel.messageCount ?? 0,
             channel.latestMessages.count,
             channel.lastMessageAt == nil ? 0 : 1
