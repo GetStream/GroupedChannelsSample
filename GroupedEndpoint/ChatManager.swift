@@ -10,12 +10,6 @@ import StreamChat
 import StreamChatSwiftUI
 internal import Combine
 
-// MARK: - Custom filter keys
-
-extension FilterKey where Scope == ChannelListFilterScope {
-    static var messageCount: FilterKey<Scope, Int> { "message_count" }
-}
-
 // MARK: - ChannelListConfig
 
 struct ChannelListConfig: Identifiable {
