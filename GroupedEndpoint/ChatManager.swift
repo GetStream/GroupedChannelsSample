@@ -95,10 +95,10 @@ class ChatManager: ObservableObject {
                 }
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     for config in channelListConfigs {
-                        let channels = groupedChannels.groups[config.groupKey]?.channels ?? []
+                        guard let channelGroup = groupedChannels.groups[config.groupKey] else { continue }
                         group.addTask { @MainActor in
                             try await withCheckedThrowingContinuation { continuation in
-                                config.controller.prefill(channels: channels) { error in
+                                config.controller.prefill(group: channelGroup) { error in
                                     if let error { continuation.resume(throwing: error) }
                                     else { continuation.resume() }
                                 }
