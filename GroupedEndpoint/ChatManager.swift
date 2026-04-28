@@ -22,7 +22,7 @@ struct ChannelListConfig: Identifiable {
 
 // MARK: - ChatManager
 
-class ChatManager: ObservableObject {
+@MainActor class ChatManager: ObservableObject {
 
     static let shared = ChatManager()
 
@@ -113,10 +113,8 @@ class ChatManager: ObservableObject {
         }
     }
 
-    // Must be called on MainActor after all prefill() calls complete.
     // Creates one VM per controller while shouldSkipInitialRemoteUpdate is still true,
     // so the synchronize() triggered inside ChatChannelListViewModel.init is skipped.
-    @MainActor
     private func createViewModels() {
         channelListViewModels = channelListConfigs.map { config in
             ChatChannelListViewModel(channelListController: config.controller)
@@ -197,7 +195,7 @@ class ChatManager: ObservableObject {
             query: newQuery,
             filter: { channel in
                 guard channel.membership != nil else { return false }
-                let count = self.effectiveMessageCount(for: channel)
+                let count = channel.effectiveMessageCount
                 let now = Date()
                 return (count == 0 && channel.createdAt > now.addingTimeInterval(-24 * 3600))
                     || (count == 1 && channel.createdAt > now.addingTimeInterval(-48 * 3600))
@@ -211,7 +209,7 @@ class ChatManager: ObservableObject {
                     print("[CurrentFilter] \(channel.cid) → false (no membership)")
                     return false
                 }
-                let emc = self.effectiveMessageCount(for: channel)
+                let emc = channel.effectiveMessageCount
                 if emc < 2 {
                     print("[CurrentFilter] \(channel.cid) → false (emc=\(emc), msgCount=\(channel.messageCount ?? -1), latestMsgs=\(channel.latestMessages.count))")
                     return false
@@ -230,7 +228,7 @@ class ChatManager: ObservableObject {
             query: expiredQuery,
             filter: { channel in
                 guard channel.membership != nil else { return false }
-                let count = self.effectiveMessageCount(for: channel)
+                let count = channel.effectiveMessageCount
                 let now = Date()
                 if count == 0 { return channel.createdAt <= now.addingTimeInterval(-24 * 3600) }
                 if count == 1 { return channel.createdAt <= now.addingTimeInterval(-48 * 3600) }
@@ -245,15 +243,6 @@ class ChatManager: ObservableObject {
             ChannelListConfig(id: 2, groupKey: "current", title: "Current", icon: "bubble.left.and.bubble.right", controller: currentController),
             ChannelListConfig(id: 3, groupKey: "expired", title: "Expired", icon: "clock.badge.xmark", controller: expiredController)
         ]
-    }
-
-    private func effectiveMessageCount(for channel: ChatChannel) -> Int {
-        print(#function, channel.messageCount ?? 0, channel.latestMessages.count, channel.lastMessageAt == nil)
-        return max(
-            channel.messageCount ?? 0,
-            channel.latestMessages.count,
-            channel.lastMessageAt == nil ? 0 : 1
-        )
     }
 
     func title(for config: ChannelListConfig) -> String {
@@ -285,6 +274,16 @@ class ChatManager: ObservableObject {
                 print("[ChatManager] failed to create channel: \(error)")
             }
         }
+    }
+}
+
+extension ChatChannel {
+    var effectiveMessageCount: Int {
+        return max(
+            messageCount ?? 0,
+            latestMessages.count,
+            lastMessageAt == nil ? 0 : 1
+        )
     }
 }
 
