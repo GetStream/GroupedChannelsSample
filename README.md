@@ -1,104 +1,133 @@
 # GroupedEndpoint
 
-A focused iOS demo app that showcases two new Stream Chat SDK APIs — **grouped channel endpoint** and **prefill** — that together eliminate redundant network requests when a user has multiple channel lists on the same screen.
+A focused iOS demo app that showcases the Stream Chat SDK's **grouped channels endpoint** — a single API call that lets the **server** bucket a user's channels into named groups, eliminating the need for one network request per channel list on screen.
 
 ## What it does
 
-The app displays four channel list tabs — **All**, **New**, **Current**, and **Expired** — each backed by a separate `ChannelListController`. Normally, four controllers would fire four HTTP requests at startup. This demo replaces those four requests with a single `queryGroupedChannels` call, then seeds each controller locally using `prefill(group:)` so the UI renders immediately without waiting for per-controller network responses.
-
-![Four tabs: All, New, Current, Expired — each showing a live channel list]
+The app displays four channel list tabs — **All**, **New**, **Current**, and **Old** — each backed by its own `ChannelList`. Normally that would mean four HTTP requests at startup. This demo replaces them with **one** `queryGroupedChannels` call. The SDK writes every returned channel into the local database tagged with its group key, and each `ChannelList` is just a live, filtered view over that shared database.
 
 ## Key APIs
 
 ### `ChatClient.queryGroupedChannels(watch:)`
 
-A single HTTP request that fetches all channel groups at once and returns a `GroupedChannels` value — a dictionary keyed by group name, each containing the channels that match that group's query.
+One HTTP request that fetches every group the server has defined for the current user and stores the results locally. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
 
 ```swift
-let groupedChannels = try await chatClient.queryGroupedChannels(watch: true)
+import StreamChat
+
+// Capture the return value when you want to inspect the response directly:
+let groupedChannels: GroupedChannels = try await client.queryGroupedChannels(watch: true)
+for (groupKey, group) in groupedChannels.groups {
+    print("\(groupKey) → \(group.channels.count) channels, \(group.unreadChannels) unread")
+}
+
+// Or fire-and-forget when the local DB is the only thing you care about:
+try await client.queryGroupedChannels(watch: true)
 ```
 
-Passing `watch: true` subscribes to WebSocket events for all returned channels simultaneously, so subsequent updates arrive over the existing connection without additional setup.
+Passing `watch: true` subscribes to WebSocket updates for every returned channel over the existing connection — no per-list watch setup.
 
-### `ChannelListController.prefill(group:completion:)`
+### `ChatClient.makeChannelList(with:)`
 
-Seeds a controller's local database state from a `ChannelGroup` taken out of the `GroupedChannels` response, without making a network request. When the controller later calls `synchronize()` internally (e.g. inside `ChatChannelListViewModel.init`), it finds existing data and skips the redundant remote query.
+Creates a UI-facing `ChannelList` bound to a group key. You do **not** pass a `ChannelListQuery`; the group key itself is the filter, and the channels come from whatever `queryGroupedChannels` (or live events) have placed in the local database under that key.
 
 ```swift
-config.controller.prefill(group: channelGroup) { error in
-    // controller is now seeded; creating the view model won't trigger a network call
+let allList     = client.makeChannelList(with: "all")
+let newList     = client.makeChannelList(with: "new")
+let currentList = client.makeChannelList(with: "current")
+let oldList     = client.makeChannelList(with: "old")
+```
+
+### Order does not matter
+
+`queryGroupedChannels(watch:)` and `makeChannelList(with:)` can be called in **either order**. They both operate on the same shared local database:
+
+- `queryGroupedChannels` **writes** channels into the DB, tagged by group.
+- `makeChannelList(with:)` opens a **live read** over that same DB, scoped to the group key.
+
+So you can:
+
+- create the `ChannelList`s up-front (e.g. in a view-model `init`) and call `queryGroupedChannels` later from a `.task { }` — the lists populate as soon as the response lands, **or**
+- call `queryGroupedChannels` first and create the lists afterwards — the data is already in the DB, the lists hydrate immediately.
+
+Either way the UI converges to the same state. This is also why you do not need to keep the `GroupedChannels` return value around — it's an acknowledgement; the source of truth is the database.
+
+## Driving SwiftUI from `ChannelList.state`
+
+`ChannelList.state` is a `ChannelListState` — an `ObservableObject` whose `channels` array is kept in sync with the DB. Pagination uses `loadMoreChannels()`.
+
+```swift
+@MainActor
+final class GroupChannelListViewModel: ObservableObject, Identifiable {
+    let id: String
+    let title: String
+
+    private let channelList: ChannelList
+    private let state: ChannelListState
+    private var cancellables: Set<AnyCancellable> = []
+
+    init(id: String, title: String, channelList: ChannelList) {
+        self.id = id
+        self.title = title
+        self.channelList = channelList
+        self.state = channelList.state
+
+        state.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+    }
+
+    var channels: [ChatChannel] { state.channels }
+
+    func loadMoreIfNeeded(after channel: ChatChannel) async {
+        guard state.channels.last?.cid == channel.cid else { return }
+        _ = try? await channelList.loadMoreChannels()
+    }
 }
 ```
 
-### Prefill flow
+### Wiring it up
 
 ```swift
-func prefillControllers() async {
-    defer {
-        Task { @MainActor in
-            createViewModels()      // view models created after prefill
-            isPrefilled = true      // gates the UI
-        }
-    }
+struct MainView: View {
+    @ObservedObject var viewModel: ViewModel
 
-    do {
-        let groupedChannels = try await chatClient.queryGroupedChannels(watch: true)
-
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for config in channelListConfigs {
-                group.addTask { @MainActor in
-                    guard let channelGroup = groupedChannels[config.groupKey] else { return }
-                    try await withCheckedThrowingContinuation { continuation in
-                        config.controller.prefill(group: channelGroup) { error in
-                            if let error { continuation.resume(throwing: error) }
-                            else { continuation.resume() }
-                        }
-                    }
-                }
+    var body: some View {
+        TabView {
+            ForEach(viewModel.groups) { group in
+                GroupChannelListView(viewModel: group)
+                    .tabItem { Label(group.title, systemImage: group.iconName) }
             }
-            try await group.waitForAll()
         }
-    } catch {
-        // on failure the defer block still runs; controllers fall back
-        // to their individual synchronize() calls
+        .task {
+            try? await client.queryGroupedChannels(watch: true)
+        }
     }
 }
 ```
 
-The `defer` block ensures view models are always created, even when `queryGroupedChannels` throws. In the error case, each `ChatChannelListViewModel` falls back to its normal individual network request.
-
-## Channel groups
-
-Four groups are defined. Each group has both a server-side `ChannelListQuery` (evaluated once at startup) and a runtime filter closure (re-evaluated on every WebSocket event to reclassify channels as time passes).
-
-| Group | Title | Server-side filter | Runtime re-classification |
-|---|---|---|---|
-| `all` | All | User is a member | `membership != nil` |
-| `new` | New | `messageCount ≤ 1` and recently created | Same bounds, live `Date()` |
-| `current` | Current | `messageCount ≥ 2` and last message within 14 days | Same, live `Date()` |
-| `expired` | Expired | No recent activity | Same, live `Date()` |
-
-The server-side dates are fixed snapshots sent with the query. The runtime closures use a fresh `Date()` each time, so channels migrate between groups (e.g. from New to Expired) without requiring a new network request.
+Creating the `ChannelList`s in the view-model's `init` and firing `queryGroupedChannels` from `.task` is the order this sample uses — but reversing it would produce the same UI.
 
 ## Architecture
 
 ```
-GroupedEndpointApp   — @main, injects ChatManager into the environment
-ContentView          — tab bar + paged TabView, gated on isPrefilled
-ChatManager          — ObservableObject singleton, owns all SDK objects
+GroupedEndpointApp   — @main, builds the StreamSession and root view
+RootView / LoginView — gates the app on connected user state
+StreamSession        — owns ChatClient and calls queryGroupedChannels
+MainView             — TabView of four GroupChannelListView pages
+GroupChannelListView — renders one ChannelList via its ChannelListState
+ChannelRow           — single-channel cell
 ```
 
-`ContentView` shows a loading spinner until `chatManager.isPrefilled` is `true`. Once set, four `ChatChannelListView` pages (from `StreamChatSwiftUI`) are rendered, one per group. Each tab label includes the live unread count for that group, sourced from `CurrentChatUserController`.
-
-A `LazyView` wrapper defers `ChatChannelListViewModel` construction until a tab is actually selected, which keeps the prefill skip-flag active on the controllers that haven't been visited yet.
+Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.groupedUnreadChannels`, which is kept up to date over the WebSocket.
 
 ## Dependencies
 
-Both packages are pinned to the `grouped-channels-endpoint` feature branch — these APIs are not yet part of a released SDK version.
+Both packages are pinned to the V5 grouped-channels feature branch — these APIs are not yet part of a released SDK version.
 
 ```
-stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: grouped-channels-endpoint
-stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: grouped-channels-endpoint
+stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: <V5 grouped-channels branch>
+stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: <V5 grouped-channels branch>
 ```
 
 ## Requirements
