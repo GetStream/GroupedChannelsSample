@@ -129,8 +129,3 @@ Both packages are pinned to the V5 grouped-channels feature branch — these API
 stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: <V5 grouped-channels branch>
 stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: <V5 grouped-channels branch>
 ```
-
-## Requirements
-
-- Xcode 26.3+
-- iOS 26.2+ deployment target
