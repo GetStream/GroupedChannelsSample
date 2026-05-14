@@ -31,15 +31,10 @@ struct RootView: View {
         Task {
             do {
                 try await streamSession.logIn()
-                guard !Task.isCancelled else {
-                    viewState = .loggedOut(nil)
-                    return
-                }
                 viewState = .loggedIn(
                     MainView.ViewModel(streamSession: streamSession)
                 )
             } catch {
-                guard !Task.isCancelled else { return }
                 viewState = .loggedOut("Could not sign in. Check your connection and try again.")
             }
         }
