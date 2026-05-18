@@ -13,7 +13,7 @@ import class StreamChatSwiftUI.StreamChat
     
     init() {
         LogConfig.level = .debug
-        LogConfig.subsystems = [.httpRequests]
+        LogConfig.subsystems = [.httpRequests, .webSocket]
         
         let clientConfig = ChatClientConfig(apiKeyString: "vrvdwv6pk4yz")
         client = ChatClient(config: clientConfig)
@@ -50,7 +50,8 @@ import class StreamChatSwiftUI.StreamChat
         let chat = try client.makeChat(
             with: channelId,
             name: channelName,
-            members: ["member_03"]
+            members: ["member_03"],
+            extraData: ["group": .string("new")]
         )
         try await chat.get(watch: true)
         try await chat.sendMessage(with: "Hello")
