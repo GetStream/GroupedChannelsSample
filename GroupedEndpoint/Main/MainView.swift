@@ -4,7 +4,6 @@
 
 import StreamChat
 import Combine
-import class StreamChatSwiftUI.DefaultViewFactory
 import struct StreamChatSwiftUI.ChatChannelView
 import SwiftUI
 
@@ -25,7 +24,7 @@ struct MainView: View {
             }
             .navigationDestination(for: ChannelId.self) { cid in
                 ChatChannelView(
-                    viewFactory: DefaultViewFactory.shared,
+                    viewFactory: CustomViewFactory.shared,
                     channelController: viewModel.channelController(for: cid)
                 )
             }

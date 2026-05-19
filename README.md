@@ -52,6 +52,17 @@ So you can:
 
 Either way the UI converges to the same state. This is also why you do not need to keep the `GroupedChannels` return value around — it's an acknowledgement; the source of truth is the database.
 
+### `Chat.updatePartial(extraData:)`
+
+Group membership is just `extraData["group"]` on the channel, so moving a channel between groups is a partial channel update through the state-layer `Chat`:
+
+```swift
+let chat = client.makeChat(for: cid)
+try await chat.updatePartial(extraData: ["group": .string("current")])
+```
+
+The server emits a channel-updated event, the SDK rewrites the channel's group tag in the local DB, and every affected `ChannelList` updates live — the channel disappears from the old tab and appears in the new one without any extra fetch. The demo wires this into the chat header via a custom `ViewFactory` (`CustomViewFactory`) that adds a trailing menu for picking **New / Current / Old**.
+
 ## Driving SwiftUI from `ChannelList.state`
 
 `ChannelList.state` is a `ChannelListState` — an `ObservableObject` whose `channels` array is kept in sync with the DB. Pagination uses `loadMoreChannels()`.
@@ -117,6 +128,7 @@ StreamSession        — owns ChatClient and calls queryGroupedChannels
 MainView             — TabView of four GroupChannelListView pages
 GroupChannelListView — renders one ChannelList via its ChannelListState
 ChannelRow           — single-channel cell
+CustomViewFactory    — overrides the channel header with a group picker that calls Chat.updatePartial
 ```
 
 Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.groupedUnreadChannels`, which is kept up to date over the WebSocket.
