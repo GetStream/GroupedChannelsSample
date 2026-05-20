@@ -41,13 +41,7 @@ struct ChannelRow: View {
                     }
                 }
             }
-            
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
         }
-        .padding(14)
-        .background(.background, in: .rect(cornerRadius: 18, style: .continuous))
     }
     
     @ViewBuilder private var avatar: some View {

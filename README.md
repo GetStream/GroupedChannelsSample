@@ -16,9 +16,9 @@ One HTTP request that fetches every group the server has defined for the current
 import StreamChat
 
 // Capture the return value when you want to inspect the response directly:
-let groupedChannels: GroupedChannels = try await client.queryGroupedChannels(watch: true)
-for (groupKey, group) in groupedChannels.groups {
-    print("\(groupKey) → \(group.channels.count) channels, \(group.unreadChannels) unread")
+let groups: [ChannelGroup] = try await client.queryGroupedChannels(watch: true)
+for group in groups {
+    print("\(group.groupKey) → \(group.channelIds.count) channels, \(group.unreadChannels) unread")
 }
 
 // Or fire-and-forget when the local DB is the only thing you care about:
@@ -50,7 +50,7 @@ So you can:
 - create the `ChannelList`s up-front (e.g. in a view-model `init`) and call `queryGroupedChannels` later from a `.task { }` — the lists populate as soon as the response lands, **or**
 - call `queryGroupedChannels` first and create the lists afterwards — the data is already in the DB, the lists hydrate immediately.
 
-Either way the UI converges to the same state. This is also why you do not need to keep the `GroupedChannels` return value around — it's an acknowledgement; the source of truth is the database.
+Either way the UI converges to the same state. This is also why you do not need to keep the `[ChannelGroup]` return value around — it's an acknowledgement; the source of truth is the database.
 
 ### `Chat.updatePartial(extraData:)`
 
@@ -61,7 +61,7 @@ let chat = client.makeChat(for: cid)
 try await chat.updatePartial(extraData: ["group": .string("current")])
 ```
 
-The server emits a channel-updated event, the SDK rewrites the channel's group tag in the local DB, and every affected `ChannelList` updates live — the channel disappears from the old tab and appears in the new one without any extra fetch. The demo wires this into the chat header via a custom `ViewFactory` (`CustomViewFactory`) that adds a trailing menu for picking **New / Current / Old**.
+The server emits a channel-updated event, the SDK rewrites the channel's group tag in the local DB, and every affected `ChannelList` updates live — the channel disappears from the old tab and appears in the new one without any extra fetch. The demo wires this into each channel list item with a menu for picking **New / Current / Old**.
 
 ## Driving SwiftUI from `ChannelList.state`
 
@@ -126,18 +126,17 @@ GroupedEndpointApp   — @main, builds the StreamSession and root view
 RootView / LoginView — gates the app on connected user state
 StreamSession        — owns ChatClient and calls queryGroupedChannels
 MainView             — TabView of four GroupChannelListView pages
-GroupChannelListView — renders one ChannelList via its ChannelListState
+GroupChannelListView — renders one ChannelList via its ChannelListState and moves channels between groups
 ChannelRow           — single-channel cell
-CustomViewFactory    — overrides the channel header with a group picker that calls Chat.updatePartial
 ```
 
-Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.groupedUnreadChannels`, which is kept up to date over the WebSocket.
+Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.groupedUnreadCount`, which is kept up to date over the WebSocket.
 
 ## Dependencies
 
 Both packages are pinned to the V5 grouped-channels feature branch — these APIs are not yet part of a released SDK version.
 
 ```
-stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: <V5 grouped-channels branch>
-stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: <V5 grouped-channels branch>
+stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: grouped-channels-v5
+stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: grouped-channels-v5
 ```

@@ -17,20 +17,21 @@ struct RootView: View {
                 MainView(viewModel: viewModel)
             case .loggedOut(let errorMessage):
                 LoginView(
+                    users: LoginUser.availableUsers,
                     loginErrorMessage: errorMessage,
-                    onSelectUser: {
-                        logIn()
+                    onSelectUser: { user in
+                        logIn(as: user)
                     }
                 )
             }
         }
     }
 
-    private func logIn() {
+    private func logIn(as user: LoginUser) {
         viewState = .loading
         Task {
             do {
-                try await streamSession.logIn()
+                try await streamSession.logIn(as: user)
                 viewState = .loggedIn(
                     MainView.ViewModel(streamSession: streamSession)
                 )

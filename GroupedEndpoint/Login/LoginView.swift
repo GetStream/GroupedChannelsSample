@@ -5,8 +5,9 @@
 import SwiftUI
 
 struct LoginView: View {
+    let users: [LoginUser]
     let loginErrorMessage: String?
-    let onSelectUser: () -> Void
+    let onSelectUser: (LoginUser) -> Void
 
     var body: some View {
         ZStack {
@@ -35,16 +36,28 @@ struct LoginView: View {
                                 .background(.red.opacity(0.1), in: .rect(cornerRadius: 16, style: .continuous))
                                 .accessibilityLabel("Login error: \(loginErrorMessage)")
                         }
-                        Button(
-                            action: { onSelectUser() },
-                            label: {
-                                Text("Login")
-                                    .font(.headline)
-                                    .padding(.vertical, 8)
-                                    .frame(maxWidth: .infinity)
+                        
+                        ForEach(users) { user in
+                            Button(
+                                action: { onSelectUser(user) },
+                                label: {
+                                    Text("Login as \(user.name)")
+                                        .font(.headline)
+                                        .padding(.vertical, 8)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            )
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Signs in with user ID \(user.id)")
+                        }
+                        
+                        if users.isEmpty {
+                            ContentUnavailableView {
+                                Label("No Login Users", systemImage: "person.crop.circle.badge.questionmark")
+                            } description: {
+                                Text("Add at least one user before signing in.")
                             }
-                        )
-                        .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -56,5 +69,5 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(loginErrorMessage: nil) {}
+    LoginView(users: LoginUser.availableUsers, loginErrorMessage: nil) { _ in }
 }

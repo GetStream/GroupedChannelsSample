@@ -24,7 +24,6 @@ struct MainView: View {
             }
             .navigationDestination(for: ChannelId.self) { cid in
                 ChatChannelView(
-                    viewFactory: CustomViewFactory.shared,
                     channelController: viewModel.channelController(for: cid)
                 )
             }
@@ -76,7 +75,7 @@ extension MainView {
         private static let groupKeys = ["all", "new", "current", "old"]
 
         let groups: [GroupChannelListView.ViewModel]
-        @Published private var groupedUnreadChannels: GroupedUnreadChannels = [:]
+        @Published private var groupedUnreadChannels: [String: Int] = [:]
 
         private let streamSession: StreamSession
         private var cancellables: Set<AnyCancellable> = []
@@ -89,12 +88,13 @@ extension MainView {
                     id: key,
                     title: Self.title(for: key),
                     iconName: Self.iconName(for: key),
+                    chatClient: streamSession.client,
                     channelList: streamSession.client.makeChannelList(with: key)
                 )
             }
 
             streamSession.connectedUserState?.$user
-                .map { $0.groupedUnreadChannels ?? [:] }
+                .map { $0.groupedUnreadCount ?? [:] }
                 .sink { [weak self] groupedUnreadChannels in
                     self?.groupedUnreadChannels = groupedUnreadChannels
                 }
@@ -105,7 +105,13 @@ extension MainView {
             guard !hasFetchedGroups else { return }
             hasFetchedGroups = true
             do {
-                try await streamSession.client.queryGroupedChannels(watch: true)
+                let r = try await streamSession.client.queryGroupedChannels(watch: true)
+                
+                for a in r {
+                    print(a.groupKey, a.unreadChannels)
+                }
+                
+                
             } catch {
                 hasFetchedGroups = false
                 print("[MainView] failed to fetch grouped channels: \(error)")
