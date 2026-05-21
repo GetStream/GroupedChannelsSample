@@ -90,6 +90,7 @@ struct GroupChannelListView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 32, height: 32)
         }
+        .disabled(!channel.canUpdateChannel)
         .accessibilityLabel("Move channel")
     }
     
