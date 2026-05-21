@@ -67,6 +67,35 @@ try await chat.updatePartial(extraData: ["group": .string("current")])
 
 The server emits a channel-updated event, the SDK rewrites the channel's group tag in the local DB, and every affected `ChannelList` updates live — the channel disappears from the old tab and appears in the new one without any extra fetch. The demo wires this into each channel list item with a menu for picking **New / Current / Old**.
 
+### Per-group unread counts
+
+The server tracks how many channels in each group have unread messages and exposes the counts on the connected user as a `[group: count]` dictionary. The SDK keeps the dictionary up to date over the WebSocket — no extra request needed.
+
+#### Reading
+
+`ConnectedUserState.user.unreadChannelCountsByGroup` is the source of truth. It is `[String: Int]?` keyed by group key; the value is the count of channels in that group with at least one unread message. `nil` and missing keys both mean "no unread channels":
+
+```swift
+let counts = connectedUser.state.user.unreadChannelCountsByGroup ?? [:]
+let newUnread = counts["new"] ?? 0
+```
+
+#### Observing
+
+`ConnectedUserState` declares `user` as `@Published`, so any Combine consumer works:
+
+```swift
+connectedUser.state.$user
+    .map { $0.unreadChannelCountsByGroup ?? [:] }
+    .removeDuplicates()
+    .sink { counts in
+        // Refresh tab badges from the new dictionary.
+    }
+    .store(in: &cancellables)
+```
+
+`removeDuplicates()` matters here — `$user` republishes on any change to the current user (avatar, name, total unread, …), not just on group counts. Without it, badge views re-render on unrelated user updates.
+
 ## Driving SwiftUI from `ChannelList.state`
 
 `ChannelList.state` is a `ChannelListState` — an `ObservableObject` whose `channels` array is kept in sync with the DB. Pagination uses `loadMoreChannels()`.
