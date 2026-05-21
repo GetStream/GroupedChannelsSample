@@ -75,7 +75,7 @@ extension MainView {
         private static let groupKeys = ["all", "new", "current", "old"]
 
         let groups: [GroupChannelListView.ViewModel]
-        @Published private var groupedUnreadChannels: [String: Int] = [:]
+        @Published private var unreadChannelCountsByGroup: [String: Int] = [:]
 
         private let streamSession: StreamSession
         private var cancellables: Set<AnyCancellable> = []
@@ -94,9 +94,10 @@ extension MainView {
             }
 
             streamSession.connectedUserState?.$user
-                .map { $0.groupedUnreadCount ?? [:] }
-                .sink { [weak self] groupedUnreadChannels in
-                    self?.groupedUnreadChannels = groupedUnreadChannels
+                .map { $0.unreadChannelCountsByGroup ?? [:] }
+                .removeDuplicates()
+                .sink { [weak self] unreadChannelCountsByGroup in
+                    self?.unreadChannelCountsByGroup = unreadChannelCountsByGroup
                 }
                 .store(in: &cancellables)
         }
@@ -123,7 +124,7 @@ extension MainView {
         }
 
         func unreadCount(for group: GroupChannelListView.ViewModel) -> Int {
-            groupedUnreadChannels[group.id] ?? 0
+            unreadChannelCountsByGroup[group.id] ?? 0
         }
 
         func createChannel() {

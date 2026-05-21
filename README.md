@@ -8,9 +8,9 @@ The app displays four channel list tabs — **All**, **New**, **Current**, and *
 
 ## Key APIs
 
-### `ChatClient.queryGroupedChannels(watch:)`
+### `ChatClient.queryGroupedChannels(limit:presence:watch:)`
 
-One HTTP request that fetches every group the server has defined for the current user and stores the results locally. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
+One HTTP request that fetches the first page of channels for **every** server-configured group at once and writes them into the local DB. The alternative — `ChannelList.get()` per group — is N round-trips for N tabs. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
 
 ```swift
 import StreamChat
@@ -25,7 +25,9 @@ for group in groups {
 try await client.queryGroupedChannels(watch: true)
 ```
 
-Passing `watch: true` subscribes to WebSocket updates for every returned channel over the existing connection — no per-list watch setup.
+The response always includes a special `"all"` group that aggregates every other group — useful for an "Everything" tab. The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
+
+About `watch:` — ordinary channel and member events arrive for channels the user is a member of either way. What `watch: true` enables is the watcher-scoped event stream, most notably typing indicators (`typing.start` / `typing.stop`). Pass `true` if you'll show typing indicators on top of the grouped channels; leave it `false` otherwise to keep server-side watcher state minimal.
 
 ### `ChatClient.makeChannelList(with:)`
 
@@ -37,6 +39,8 @@ let newList     = client.makeChannelList(with: "new")
 let currentList = client.makeChannelList(with: "current")
 let oldList     = client.makeChannelList(with: "old")
 ```
+
+Each list also registers itself with the SDK's sync repository as soon as it's created, so it stays in sync across reconnects with no extra wiring.
 
 ### Order does not matter
 
@@ -124,13 +128,13 @@ Creating the `ChannelList`s in the view-model's `init` and firing `queryGroupedC
 ```
 GroupedEndpointApp   — @main, builds the StreamSession and root view
 RootView / LoginView — gates the app on connected user state
-StreamSession        — owns ChatClient and calls queryGroupedChannels
-MainView             — TabView of four GroupChannelListView pages
+StreamSession        — owns ChatClient; handles login, channel creation, mark-all-read
+MainView             — TabView of four pages; its ViewModel calls queryGroupedChannels and tracks per-group unread counts
 GroupChannelListView — renders one ChannelList via its ChannelListState and moves channels between groups
 ChannelRow           — single-channel cell
 ```
 
-Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.groupedUnreadCount`, which is kept up to date over the WebSocket.
+Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.unreadChannelCountsByGroup`, which is kept up to date over the WebSocket.
 
 ## Dependencies
 
