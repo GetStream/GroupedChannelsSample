@@ -8,24 +8,33 @@ The app displays four channel list tabs — **All**, **New**, **Current**, and *
 
 ## Key APIs
 
-### `ChatClient.queryGroupedChannels(limit:presence:watch:)`
+### `ChatClient.queryGroupedChannels(groups:limit:presence:watch:)`
 
-One HTTP request that fetches the first page of channels for **every** server-configured group at once and writes them into the local DB. The alternative — `ChannelList.get()` per group — is N round-trips for N tabs. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
+One HTTP request that fetches the first page of channels for the requested groups at once and writes them into the local DB. The alternative — `ChannelList.get()` per group — is N round-trips for N tabs. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
 
 ```swift
 import StreamChat
 
-// Capture the return value when you want to inspect the response directly:
-let groups: [ChannelGroup] = try await client.queryGroupedChannels(watch: true)
+// Fetch every server-configured group. The response includes a synthetic "all"
+// group that aggregates every other group — useful for an "Everything" tab.
+let groups: [ChannelGroup] = try await client.queryGroupedChannels()
 for group in groups {
     print("\(group.groupKey) → \(group.channelIds.count) channels, \(group.unreadChannels) unread")
 }
 
-// Or fire-and-forget when the local DB is the only thing you care about:
-try await client.queryGroupedChannels(watch: true)
+// Or fetch a specific set of groups. The demo uses this form to keep the
+// request scoped to the four tabs it actually renders — note that "all" is
+// passed explicitly, because once `groups` is non-empty the synthetic "all"
+// aggregate is no longer added automatically.
+try await client.queryGroupedChannels(groups: ["all", "new", "current", "old"])
 ```
 
-The response always includes a special `"all"` group that aggregates every other group — useful for an "Everything" tab. The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
+`groups` is the new opt-in filter:
+
+- `nil` (the default) or an empty array fetches **every** server-configured group, and the response includes the synthetic `"all"` aggregate.
+- A non-empty array fetches **only** those groups. The synthetic `"all"` aggregate is **not** added automatically — include `"all"` explicitly if you want it (the demo does).
+
+The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
 
 About `watch:` — ordinary channel and member events arrive for channels the user is a member of either way. What `watch: true` enables is the watcher-scoped event stream, most notably typing indicators (`typing.start` / `typing.stop`). Pass `true` if you'll show typing indicators on top of the grouped channels; leave it `false` otherwise to keep server-side watcher state minimal.
 
@@ -44,7 +53,7 @@ Each list also registers itself with the SDK's sync repository as soon as it's c
 
 ### Order does not matter
 
-`queryGroupedChannels(watch:)` and `makeChannelList(with:)` can be called in **either order**. They both operate on the same shared local database:
+`queryGroupedChannels(groups:)` and `makeChannelList(with:)` can be called in **either order**. They both operate on the same shared local database:
 
 - `queryGroupedChannels` **writes** channels into the DB, tagged by group.
 - `makeChannelList(with:)` opens a **live read** over that same DB, scoped to the group key.
@@ -144,7 +153,7 @@ struct MainView: View {
             }
         }
         .task {
-            try? await client.queryGroupedChannels(watch: true)
+            try? await client.queryGroupedChannels(groups: ["all", "new", "current", "old"])
         }
     }
 }

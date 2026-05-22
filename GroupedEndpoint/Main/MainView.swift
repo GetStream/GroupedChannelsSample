@@ -106,13 +106,7 @@ extension MainView {
             guard !hasFetchedGroups else { return }
             hasFetchedGroups = true
             do {
-                let r = try await streamSession.client.queryGroupedChannels(watch: true)
-                
-                for a in r {
-                    print(a.groupKey, a.unreadChannels)
-                }
-                
-                
+                try await streamSession.client.queryGroupedChannels(groups: Self.groupKeys)
             } catch {
                 hasFetchedGroups = false
                 print("[MainView] failed to fetch grouped channels: \(error)")
