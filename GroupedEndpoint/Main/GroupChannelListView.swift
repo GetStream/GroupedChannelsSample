@@ -17,6 +17,20 @@ extension ChannelGroupOption {
         ChannelGroupOption(id: "current", title: "Current"),
         ChannelGroupOption(id: "old", title: "Old")
     ]
+
+    static func option(forID id: String) -> ChannelGroupOption? {
+        available.first { $0.id == id }
+    }
+}
+
+extension ChatChannel {
+    var groupID: String? {
+        if case let .string(value) = extraData["group"] {
+            value
+        } else {
+            nil
+        }
+    }
 }
 
 struct GroupChannelListView: View {
@@ -55,14 +69,14 @@ struct GroupChannelListView: View {
     private func channelListItem(for channel: ChatChannel) -> some View {
         HStack(spacing: 8) {
             NavigationLink(value: channel.cid) {
-                ChannelRow(channel: channel)
+                ChannelRow(channel: channel) { option in
+                    viewModel.move(channel: channel, to: option)
+                }
             }
             .buttonStyle(.plain)
-            
+
             Spacer(minLength: 0)
-            
-            moveMenu(for: channel)
-            
+
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
@@ -70,38 +84,7 @@ struct GroupChannelListView: View {
         .padding(14)
         .background(.background, in: .rect(cornerRadius: 18, style: .continuous))
     }
-    
-    private func moveMenu(for channel: ChatChannel) -> some View {
-        Menu {
-            ForEach(ChannelGroupOption.available) { option in
-                Button {
-                    viewModel.move(channel: channel, to: option)
-                } label: {
-                    if currentGroup(for: channel) == option.id {
-                        Label(option.title, systemImage: "checkmark")
-                    } else {
-                        Text(option.title)
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "rectangle.3.group")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-        }
-        .disabled(!channel.canUpdateChannel)
-        .accessibilityLabel("Move channel")
-    }
-    
-    private func currentGroup(for channel: ChatChannel) -> String? {
-        if case let .string(value) = channel.extraData["group"] {
-            value
-        } else {
-            nil
-        }
-    }
-    
+
     @ViewBuilder private var footer: some View {
         if viewModel.isLoadingMore {
             ProgressView()

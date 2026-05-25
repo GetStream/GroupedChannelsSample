@@ -15,24 +15,22 @@ One HTTP request that fetches the first page of channels for the requested group
 ```swift
 import StreamChat
 
-// Fetch every server-configured group. The response includes a synthetic "all"
-// group that aggregates every other group — useful for an "Everything" tab.
-let groups: [ChannelGroup] = try await client.queryGroupedChannels()
+// `groups` is required — pass the list of group keys you want to fetch.
+// The demo scopes the request to the four tabs it actually renders, and
+// includes "all" explicitly to get the synthetic aggregate that covers
+// every other group.
+let groups: [ChannelGroup] = try await client.queryGroupedChannels(
+    groups: ["all", "new", "current", "old"]
+)
 for group in groups {
     print("\(group.groupKey) → \(group.channelIds.count) channels, \(group.unreadChannels) unread")
 }
-
-// Or fetch a specific set of groups. The demo uses this form to keep the
-// request scoped to the four tabs it actually renders — note that "all" is
-// passed explicitly, because once `groups` is non-empty the synthetic "all"
-// aggregate is no longer added automatically.
-try await client.queryGroupedChannels(groups: ["all", "new", "current", "old"])
 ```
 
-`groups` is the new opt-in filter:
+`groups` is **required** — you must specify the list of group keys to fetch:
 
-- `nil` (the default) or an empty array fetches **every** server-configured group, and the response includes the synthetic `"all"` aggregate.
-- A non-empty array fetches **only** those groups. The synthetic `"all"` aggregate is **not** added automatically — include `"all"` explicitly if you want it (the demo does).
+- The response is restricted to the groups you request; there is no longer a "fetch every server-configured group" default.
+- Include `"all"` explicitly when you want the synthetic aggregate alongside the named groups — it is not added automatically.
 
 The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
 
