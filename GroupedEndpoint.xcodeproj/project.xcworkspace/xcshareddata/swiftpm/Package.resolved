@@ -7,7 +7,7 @@
       "location" : "https://github.com/GetStream/stream-chat-swift.git",
       "state" : {
         "branch" : "grouped-channels-v5",
-        "revision" : "6989801a48d07e61ccc7740d867296ce060e1101"
+        "revision" : "f94acb3414bd0fd37180b976ea47fbd2e94d642a"
       }
     },
     {
