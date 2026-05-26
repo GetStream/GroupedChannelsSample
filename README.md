@@ -34,7 +34,7 @@ for group in groups {
 
 The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
 
-About `watch:` — ordinary channel and member events arrive for channels the user is a member of either way. What `watch: true` enables is the watcher-scoped event stream, most notably typing indicators (`typing.start` / `typing.stop`). Pass `true` if you'll show typing indicators on top of the grouped channels; leave it `false` otherwise to keep server-side watcher state minimal.
+`watch:` defaults to `true` and subscribes to all WebSocket events for the returned channels — including `channel.updated`, which is what drives the live "move between groups" behaviour described below.
 
 ### `ChatClient.makeChannelList(with:)`
 
