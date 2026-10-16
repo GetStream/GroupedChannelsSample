@@ -124,7 +124,7 @@ struct ChannelRow: View {
         switch id {
         case "new": .blue
         case "current": .green
-        case "old": .gray
+        case "expired": .gray
         default: .secondary
         }
     }

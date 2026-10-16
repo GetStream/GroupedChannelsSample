@@ -72,7 +72,7 @@ struct MainView: View {
 
 extension MainView {
     @MainActor final class ViewModel: ObservableObject {
-        private static let groupKeys = ["all", "new", "current", "old"]
+        private static let groupKeys = ["all", "current", "new", "campaign", "expired"]
 
         let groups: [GroupChannelListView.ViewModel]
         @Published private var unreadChannelCountsByGroup: [String: Int] = [:]
@@ -106,7 +106,25 @@ extension MainView {
             guard !hasFetchedGroups else { return }
             hasFetchedGroups = true
             do {
-                try await streamSession.client.queryGroupedChannels(groups: Self.groupKeys)
+                // All five tabs in one request. Each tab has its own query_timestamp cutoff;
+                // filters require sorting by query_timestamp.
+                let query = GroupedChannelsQuery(
+                    groups: [
+                        .init(key: "all", filter: .or([
+                            .and([.equal(.group, to: "ended"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(7))]),
+                            .in(.group, values: ["campaign", "new"]),
+                            .and([.equal(.group, to: "current"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(365))]),
+                            .and([.equal(.group, to: "expired"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(14))])
+                        ])),
+                        .init(key: "current", filter: .greaterOrEqual(.queryTimestamp, than: .daysAgo(365))),
+                        .init(key: "new"),
+                        .init(key: "campaign"),
+                        .init(key: "expired", filter: .greaterOrEqual(.queryTimestamp, than: .daysAgo(14)))
+                    ],
+                    sort: [.init(key: .queryTimestamp)],
+                    limit: 10
+                )
+                try await streamSession.client.queryGroupedChannels(with: query)
             } catch {
                 hasFetchedGroups = false
                 print("[MainView] failed to fetch grouped channels: \(error)")
@@ -149,8 +167,10 @@ extension MainView {
                 return "New"
             case "current":
                 return "Current"
-            case "old":
-                return "Old"
+            case "campaign":
+                return "Campaign"
+            case "expired":
+                return "Expired"
             default:
                 return key
                     .split(separator: "_")
@@ -167,8 +187,10 @@ extension MainView {
                 return "sparkles"
             case "current":
                 return "bubble.left.and.bubble.right"
-            case "old":
-                return "archivebox"
+            case "campaign":
+                return "megaphone"
+            case "expired":
+                return "clock.badge.xmark"
             default:
                 return "rectangle.stack"
             }

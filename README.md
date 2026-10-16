@@ -1,67 +1,105 @@
 # GroupedEndpoint
 
-A focused iOS demo app that showcases the Stream Chat SDK's **grouped channels endpoint** — a single API call that lets the **server** bucket a user's channels into named groups, eliminating the need for one network request per channel list on screen.
+An iOS demo of the Stream Chat SDK's grouped channels endpoint. One API call fetches a user's channels in named groups.
 
 ## What it does
 
-The app displays four channel list tabs — **All**, **New**, **Current**, and **Old** — each backed by its own `ChannelList`. Normally that would mean four HTTP requests at startup. This demo replaces them with **one** `queryGroupedChannels` call. The SDK writes every returned channel into the local database tagged with its group key, and each `ChannelList` is just a live, filtered view over that shared database.
+The app displays five tabs: All, Current, New, Campaign, and Expired. Each has its own `ChannelList`. One `queryGroupedChannels(with:)` call fetches the first page for all five tabs. Current and Expired have `query_timestamp` cutoffs; All combines group and cutoff filters. New and Campaign have no additional filter. The SDK stores the returned channels in a shared local database, and each list observes the channels linked to its group.
 
 ## Key APIs
 
-### `ChatClient.queryGroupedChannels(groups:limit:presence:watch:)`
+### `ChatClient.queryGroupedChannels(with:)`
 
-One HTTP request that fetches the first page of channels for the requested groups at once and writes them into the local DB. The alternative — `ChannelList.get()` per group — is N round-trips for N tabs. The call is annotated `@discardableResult`, so you can ignore the return value when you only need the side effect of populating the database.
+`GroupedChannelsQuery` specifies the groups, an optional filter for each group, and a shared sort order. Filters require sorting by `.queryTimestamp`. The demo sends:
 
 ```swift
 import StreamChat
 
-// `groups` is required — pass the list of group keys you want to fetch.
-// The demo scopes the request to the four tabs it actually renders, and
-// includes "all" explicitly to get the synthetic aggregate that covers
-// every other group.
-let groups: [ChannelGroup] = try await client.queryGroupedChannels(
-    groups: ["all", "new", "current", "old"]
+let query = GroupedChannelsQuery(
+    groups: [
+        .init(key: "all", filter: .or([
+            .and([.equal(.group, to: "ended"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(7))]),
+            .in(.group, values: ["campaign", "new"]),
+            .and([.equal(.group, to: "current"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(365))]),
+            .and([.equal(.group, to: "expired"), .greaterOrEqual(.queryTimestamp, than: .daysAgo(14))])
+        ])),
+        .init(key: "current", filter: .greaterOrEqual(.queryTimestamp, than: .daysAgo(365))),
+        .init(key: "new"),
+        .init(key: "campaign"),
+        .init(key: "expired", filter: .greaterOrEqual(.queryTimestamp, than: .daysAgo(14)))
+    ],
+    sort: [.init(key: .queryTimestamp)],
+    limit: 10
 )
-for group in groups {
-    print("\(group.groupKey) → \(group.channelIds.count) channels, \(group.unreadChannels) unread")
+try await client.queryGroupedChannels(with: query)
+```
+
+The request body is:
+
+```json
+{
+  "limit": 10,
+  "presence": false,
+  "sort": [{"field": "query_timestamp", "direction": -1}],
+  "watch": true,
+  "groups": {
+    "all": {"filter_conditions": {"$or": [
+      {"$and": [{"group": {"$eq": "ended"}}, {"query_timestamp": {"$gte": "now-7d"}}]},
+      {"group": {"$in": ["campaign", "new"]}},
+      {"$and": [{"group": {"$eq": "current"}}, {"query_timestamp": {"$gte": "now-365d"}}]},
+      {"$and": [{"group": {"$eq": "expired"}}, {"query_timestamp": {"$gte": "now-14d"}}]}
+    ]}},
+    "current": {"filter_conditions": {"query_timestamp": {"$gte": "now-365d"}}},
+    "new": {},
+    "campaign": {},
+    "expired": {"filter_conditions": {"query_timestamp": {"$gte": "now-14d"}}}
+  }
 }
 ```
 
-`groups` is **required** — you must specify the list of group keys to fetch:
+- `.daysAgo(n)` sets a cutoff relative to the first-page request. Pagination keeps that cutoff; a new query, including a refresh after reconnecting, advances it. Use `.date(_:)` for a fixed cutoff.
+- Each group's filter and the sort are reused when a `ChannelList` loads more channels and when the SDK refreshes the lists after a reconnect.
+- Between requests, WebSocket events only add channels that match the tab's filter. While the app is running, the SDK checks loaded channels against the filter every 60 seconds and removes those that no longer match.
+- For filtered groups, the SDK maintains filtered unread channel counts on the connected user, combining the server's count for unloaded channels with local counts for loaded channels.
 
-- The response is restricted to the groups you request; there is no longer a "fetch every server-configured group" default.
-- Include `"all"` explicitly when you want the synthetic aggregate alongside the named groups — it is not added automatically.
+`limit` caps the first page at 10 channels per group in this sample. Omitting it uses the backend default. `presence` defaults to `false`; setting it to `true` includes presence information and subscribes to presence updates. `watch` defaults to `true` and subscribes to events for returned channels, including `channel.updated`.
 
-The `limit` parameter caps channels-per-group on the first page (defaults to the backend's default), and `presence` opts into online-state updates over the WebSocket.
+The call returns `[ChannelGroup]` and is annotated `@discardableResult`. You can use the returned groups directly or let the `ChannelList`s observe the database updates.
 
-`watch:` defaults to `true` and subscribes to all WebSocket events for the returned channels — including `channel.updated`, which is what drives the live "move between groups" behaviour described below.
+### `ChatClient.queryGroupedChannels(groups:limit:presence:watch:)`
+
+For groups without additional filters, the simpler overload fetches the first page in one request:
+
+```swift
+let groups: [ChannelGroup] = try await client.queryGroupedChannels(
+    groups: ["all", "current", "new", "campaign", "expired"]
+)
+for group in groups {
+    print("\(group.groupKey) → \(group.channels.count) channels, \(group.unreadChannels) unread")
+}
+```
+
+The `groups` argument is required. A nonempty list restricts the response to those groups. Include `"all"` explicitly to request the synthetic aggregate alongside named groups. This sample uses the filter-based overload above.
 
 ### `ChatClient.makeChannelList(with:)`
 
-Creates a UI-facing `ChannelList` bound to a group key. You do **not** pass a `ChannelListQuery`; the group key itself is the filter, and the channels come from whatever `queryGroupedChannels` (or live events) have placed in the local database under that key.
+Creates a UI-facing `ChannelList` bound to a group key. Pass the group key to this method; `queryGroupedChannels(with:)` supplies the group's filter and sort. The list observes channels linked to that group in the local database.
 
 ```swift
-let allList     = client.makeChannelList(with: "all")
-let newList     = client.makeChannelList(with: "new")
-let currentList = client.makeChannelList(with: "current")
-let oldList     = client.makeChannelList(with: "old")
+let allList      = client.makeChannelList(with: "all")
+let currentList  = client.makeChannelList(with: "current")
+let newList      = client.makeChannelList(with: "new")
+let campaignList = client.makeChannelList(with: "campaign")
+let expiredList  = client.makeChannelList(with: "expired")
 ```
 
 Each list also registers itself with the SDK's sync repository as soon as it's created, so it stays in sync across reconnects with no extra wiring.
 
 ### Order does not matter
 
-`queryGroupedChannels(groups:)` and `makeChannelList(with:)` can be called in **either order**. They both operate on the same shared local database:
+`queryGroupedChannels(with:)` and `makeChannelList(with:)` can be called in either order. The query writes channels into the shared database, and each list observes its group there. Lists created first populate when the response arrives. Lists created after the query read the stored channels immediately.
 
-- `queryGroupedChannels` **writes** channels into the DB, tagged by group.
-- `makeChannelList(with:)` opens a **live read** over that same DB, scoped to the group key.
-
-So you can:
-
-- create the `ChannelList`s up-front (e.g. in a view-model `init`) and call `queryGroupedChannels` later from a `.task { }` — the lists populate as soon as the response lands, **or**
-- call `queryGroupedChannels` first and create the lists afterwards — the data is already in the DB, the lists hydrate immediately.
-
-Either way the UI converges to the same state. This is also why you do not need to keep the `[ChannelGroup]` return value around — it's an acknowledgement; the source of truth is the database.
+The database is the source of truth for the lists, so you do not need to retain the returned `[ChannelGroup]` values.
 
 ### `Chat.updatePartial(extraData:)`
 
@@ -72,15 +110,15 @@ let chat = client.makeChat(for: cid)
 try await chat.updatePartial(extraData: ["group": .string("current")])
 ```
 
-The server emits a channel-updated event, the SDK rewrites the channel's group tag in the local DB, and every affected `ChannelList` updates live — the channel disappears from the old tab and appears in the new one without any extra fetch. The demo wires this into each channel list item with a menu for picking **New / Current / Old**.
+The server emits a channel-updated event, and the SDK updates the channel's group in the local database. The channel leaves its previous list and joins any lists whose group and filter it matches, without another fetch. Each channel row has a menu for choosing Campaign, Current, Ended, Expired, or New. The All filter includes these groups, with cutoffs for Current, Ended, and Expired.
 
 ### Per-group unread counts
 
-The server tracks how many channels in each group have unread messages and exposes the counts on the connected user as a `[group: count]` dictionary. The SDK keeps the dictionary up to date over the WebSocket — no extra request needed.
+The connected user exposes unread channel counts as a `[group: count]` dictionary. For unfiltered groups, the SDK uses the server's counts. For filtered groups, it maintains counts from the grouped response and local channel state, including live events and filter expiry.
 
 #### Reading
 
-`ConnectedUserState.user.unreadChannelCountsByGroup` is the source of truth. It is `[String: Int]?` keyed by group key; the value is the count of channels in that group with at least one unread message. `nil` and missing keys both mean "no unread channels":
+`ConnectedUserState.user.unreadChannelCountsByGroup` is `[String: Int]?`, keyed by group. Each value counts channels with at least one unread message. The sample displays zero when the dictionary or a key is missing:
 
 ```swift
 let counts = connectedUser.state.user.unreadChannelCountsByGroup ?? [:]
@@ -101,11 +139,11 @@ connectedUser.state.$user
     .store(in: &cancellables)
 ```
 
-`removeDuplicates()` matters here — `$user` republishes on any change to the current user (avatar, name, total unread, …), not just on group counts. Without it, badge views re-render on unrelated user updates.
+`$user` republishes on changes to the current user's avatar, name, total unread count, and other properties. `removeDuplicates()` prevents badge updates when the group counts have not changed.
 
 ## Driving SwiftUI from `ChannelList.state`
 
-`ChannelList.state` is a `ChannelListState` — an `ObservableObject` whose `channels` array is kept in sync with the DB. Pagination uses `loadMoreChannels()`.
+`ChannelList.state` is a `ChannelListState`, an `ObservableObject` whose `channels` array stays in sync with the database. Pagination uses `loadMoreChannels()`.
 
 ```swift
 @MainActor
@@ -151,13 +189,13 @@ struct MainView: View {
             }
         }
         .task {
-            try? await client.queryGroupedChannels(groups: ["all", "new", "current", "old"])
+            try? await client.queryGroupedChannels(with: query)
         }
     }
 }
 ```
 
-Creating the `ChannelList`s in the view-model's `init` and firing `queryGroupedChannels` from `.task` is the order this sample uses — but reversing it would produce the same UI.
+This sample creates the `ChannelList`s in the view model's `init` and calls `queryGroupedChannels(with:)` from `.task`.
 
 ## Architecture
 
@@ -165,18 +203,18 @@ Creating the `ChannelList`s in the view-model's `init` and firing `queryGroupedC
 GroupedEndpointApp   — @main, builds the StreamSession and root view
 RootView / LoginView — gates the app on connected user state
 StreamSession        — owns ChatClient; handles login, channel creation, mark-all-read
-MainView             — TabView of four pages; its ViewModel calls queryGroupedChannels and tracks per-group unread counts
+MainView             — TabView of five pages; its ViewModel calls queryGroupedChannels and tracks per-group unread counts
 GroupChannelListView — renders one ChannelList via its ChannelListState and moves channels between groups
 ChannelRow           — single-channel cell
 ```
 
-Four group keys are used: `all`, `new`, `current`, `old`. The server decides which channels land in each group. The unread badge on each tab is sourced from `ConnectedUserState.user.unreadChannelCountsByGroup`, which is kept up to date over the WebSocket.
+Five group keys are used: `all`, `current`, `new`, `campaign`, `expired`. The server decides which channels land in each group, narrowed by each tab's filter. The unread badge on each tab is sourced from `ConnectedUserState.user.unreadChannelCountsByGroup`, which is kept up to date over the WebSocket.
 
 ## Dependencies
 
-Both packages are pinned to the V5 grouped-channels feature branch — these APIs are not yet part of a released SDK version.
+The project requires StreamChatSwiftUI 5.14.0 or later within version 5. The lockfile resolves both StreamChatSwiftUI and its StreamChat dependency to 5.14.0. These releases include the grouped-channel filter APIs used by the sample.
 
 ```
-stream-chat-swift    github.com/GetStream/stream-chat-swift    branch: grouped-channels-v5
-stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  branch: grouped-channels-v5
+stream-chat-swift    github.com/GetStream/stream-chat-swift    version: 5.14.0 (transitive)
+stream-chat-swiftui  github.com/GetStream/stream-chat-swiftui  version: 5.14.0
 ```

@@ -13,6 +13,24 @@ struct LoginUser: Identifiable, Hashable {
 }
 
 extension LoginUser {
+    static let member01 = LoginUser(
+        id: "member_01",
+        name: "Member 1",
+        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoibWVtYmVyXzAxIn0.JEXL5-mvLcz96EG-CUSbdYgY-hex3iqktL75uSi_Uoo"
+    )
+
+    static let member02 = LoginUser(
+        id: "member_02",
+        name: "Member 2",
+        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoibWVtYmVyXzAyIn0.z9gG7F9u-td_It3WA2kGOkI_Li5TtrcFh3YAi4AxgT0"
+    )
+
+    static let member03 = LoginUser(
+        id: "member_03",
+        name: "Member 3",
+        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoibWVtYmVyXzAzIn0.G5e_HucwuVmWKB6NjuE-izAltTxH_k-AyY5RlAo-2VY"
+    )
+
     static let myuser01 = LoginUser(
         id: "myuser_1",
         name: "User 1",
@@ -26,6 +44,9 @@ extension LoginUser {
     )
     
     static let availableUsers: [LoginUser] = [
+        .member01,
+        .member02,
+        .member03,
         .myuser01,
         .myuser02
     ]

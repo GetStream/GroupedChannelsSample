@@ -13,9 +13,11 @@ struct ChannelGroupOption: Identifiable {
 
 extension ChannelGroupOption {
     static let available: [ChannelGroupOption] = [
-        ChannelGroupOption(id: "new", title: "New"),
+        ChannelGroupOption(id: "campaign", title: "Campaign"),
         ChannelGroupOption(id: "current", title: "Current"),
-        ChannelGroupOption(id: "old", title: "Old")
+        ChannelGroupOption(id: "ended", title: "Ended"),
+        ChannelGroupOption(id: "expired", title: "Expired"),
+        ChannelGroupOption(id: "new", title: "New")
     ]
 
     static func option(forID id: String) -> ChannelGroupOption? {

@@ -349,7 +349,7 @@
 			repositoryURL = "https://github.com/GetStream/stream-chat-swiftui";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 5.5.0;
+				minimumVersion = 5.14.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
